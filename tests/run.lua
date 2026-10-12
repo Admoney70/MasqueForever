@@ -255,6 +255,76 @@ test("aura buttons with secret layout values", function()
 	eq(st.active, false, "unskins cleanly")
 end)
 
+test("new groups while the options panel is open", function()
+	local panel
+	for _, f in ipairs(M.frames) do if f.name == "Guise" then panel = f end end
+	assert(panel, "panel built")
+	panel:Show()
+	panel._scripts.OnShow(panel)
+	for i = 1, 5 do MSQ:Group("PanelTest", "Group " .. i) end
+	M.RunTimers()
+	panel:Hide()
+end)
+
+test("Masque-format skin pack features", function()
+	-- Structure modelled on current Masque skin packs.
+	MSQ:AddSkin("Pack", {
+		Shape = "Square",
+		Backdrop = { Texture = [[Interface\AddOns\Masque\Textures\Backdrop\Action]] },
+		Icon = { Backpack = [[Interface\Icons\INV_Misc_Bag_08]], TexCoords = { 0.02, 0.98, 0.02, 0.98 } },
+		Normal = { Texture = "pack-normal", Width = 42, Height = 42 },
+		Pushed = { Color = { 0, 0, 0, 0.5 }, UseColor = true },
+		Checked = { Texture = "pack-border", Width = 42, Height = 42 },
+		SlotHighlight = "Checked",
+		Border = { Texture = "pack-border", Width = 42, Height = 42 },
+		DebuffBorder = { Texture = "pack-debuff" },
+		IconBorder = "Border",
+		HotKey = { OffsetX = -2, OffsetY = -2 },
+		Cooldown = {
+			Texture = [[Interface\AddOns\Masque\Textures\Square\Mask]],
+			EdgeTexture = [[Interface\AddOns\Masque\Textures\Square\Edge]],
+			Color = { 0, 0, 0, 0.7 },
+		},
+	})
+	local g = MSQ:Group("PackTest", "Bar")
+	ns.SetOption(g, "Inherit", false)
+	ns.SetOption(g, "SkinID", "Pack")
+
+	local b = M.NewActionButton("PackButton", 36)
+	g:AddButton(b, nil, "Action")
+	eq(b:GetPushedTexture():GetTexture(), "color", "solid colour fill")
+	eq(b:GetPushedTexture()._color[4], 0.5)
+	local hk = b.HotKey
+	local p, _, rp, x = hk:GetPoint(1)
+	eq(p, "TOPRIGHT", "default text anchor"); eq(rp, "TOPRIGHT"); eq(x, -2)
+	eq(hk:GetJustifyH(), "RIGHT")
+	eq(b.cooldown._swipeTex, [[Interface\Buttons\WHITE8x8]], "Masque texture remapped")
+	eq(g:GetLayer(b, "Backdrop"):GetTexture(), [[Interface\AddOns\!Guise\Textures\Backdrop]])
+
+	local d = M.NewActionButton("PackDebuff", 36)
+	g:AddButton(d, nil, "Debuff")
+	eq(d.Border:GetTexture(), "pack-debuff", "DebuffBorder layer")
+
+	local item = M.NewActionButton("PackItem", 36)
+	item.IconBorder = item:CreateTexture()
+	item.SlotHighlightTexture = item:CreateTexture()
+	g:AddButton(item, nil, "Item")
+	eq(item.IconBorder:GetTexture(), "pack-border", "string alias")
+	eq(item.SlotHighlightTexture:GetTexture(), "pack-border", "string alias to Checked")
+end)
+
+test("skin-pack loader stub is not mistaken for Masque", function()
+	M.addons.Masque = 2
+	M.metadata["Masque:X-Guise-Shim"] = "1"
+	local other = {}
+	LibStub.minors.Masque = nil
+	local chunk = assert(loadfile("Core.lua"))
+	chunk("!Guise", other)
+	assert(not other.disabled, "should not stand down for the stub")
+	M.addons.Masque = nil
+	M.metadata["Masque:X-Guise-Shim"] = nil
+end)
+
 test("stands down when Masque is enabled", function()
 	M.addons.Masque = 2
 	local other = {}

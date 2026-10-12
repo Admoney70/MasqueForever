@@ -69,8 +69,12 @@ local function CreateSkinPicker(parent, row)
 		dd:SetupMenu(function(_, root)
 			for _, id in ipairs(ns.SkinList()) do
 				root:CreateRadio(id,
-					function() return ns.GetOption(row.group, "SkinID") == id end,
-					function() ns.SetOption(row.group, "SkinID", id) ns.RefreshOptions() end)
+					function() return row.group ~= nil and ns.GetOption(row.group, "SkinID") == id end,
+					function()
+						if not row.group then return end
+						ns.SetOption(row.group, "SkinID", id)
+						ns.RefreshOptions()
+					end)
 			end
 		end)
 		function dd:Refresh() self:GenerateMenu() end
@@ -80,6 +84,7 @@ local function CreateSkinPicker(parent, row)
 	local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
 	btn:SetSize(150, 22)
 	btn:SetScript("OnClick", function()
+		if not row.group then return end
 		local list = ns.SkinList()
 		local current = ns.GetOption(row.group, "SkinID")
 		local nextID = list[1]
@@ -89,7 +94,7 @@ local function CreateSkinPicker(parent, row)
 		ns.SetOption(row.group, "SkinID", nextID)
 		ns.RefreshOptions()
 	end)
-	function btn:Refresh() self:SetText(ns.GetOption(row.group, "SkinID")) end
+	function btn:Refresh() self:SetText(row.group and ns.GetOption(row.group, "SkinID") or "") end
 	return btn
 end
 
@@ -109,7 +114,11 @@ local function CreateRow(index)
 	row.skin:SetPoint("LEFT", 200, 0)
 
 	local function toggle(key)
-		return function(value) ns.SetOption(row.group, key, value) ns.RefreshOptions() end
+		return function(value)
+			if not row.group then return end
+			ns.SetOption(row.group, key, value)
+			ns.RefreshOptions()
+		end
 	end
 
 	row.inherit = CreateCheck(row, "Inherit", "Use the parent group's settings.", toggle("Inherit"))
@@ -125,6 +134,7 @@ local function CreateRow(index)
 	row.shadow:SetPoint("LEFT", row.gloss, "RIGHT", 44, 0)
 
 	row.disabled = CreateCheck(row, "Off", "Leave these buttons unskinned.", function(value)
+		if not row.group then return end
 		ns.SetOption(row.group, "Disabled", value)
 		ns.RefreshOptions()
 	end)
@@ -169,7 +179,7 @@ local function UpdateRow(row, entry)
 	row:Show()
 end
 
-function ns.RefreshOptions()
+local function Refresh()
 	if not panel or not panel:IsVisible() then return end
 	local list = Flatten(ns.root, 0, {})
 	for i, entry in ipairs(list) do
@@ -177,6 +187,17 @@ function ns.RefreshOptions()
 	end
 	for i = #list + 1, #rows do rows[i]:Hide() end
 	scrollChild:SetHeight(#list * ROW_HEIGHT)
+end
+
+-- Coalesced: add-ons can create dozens of groups in one frame.
+local refreshQueued = false
+function ns.RefreshOptions()
+	if refreshQueued or not panel or not panel:IsVisible() then return end
+	refreshQueued = true
+	C_Timer.After(0, function()
+		refreshQueued = false
+		Refresh()
+	end)
 end
 
 ----------------------------------------------------------------------
@@ -220,7 +241,7 @@ local function BuildPanel()
 
 	panel:SetScript("OnShow", function()
 		blizz:SetChecked(ns.db and ns.db.Blizzard)
-		ns.RefreshOptions()
+		Refresh()
 	end)
 
 	if Settings and Settings.RegisterCanvasLayoutCategory then

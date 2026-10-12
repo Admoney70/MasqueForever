@@ -2,6 +2,7 @@ package-as: "!Guise"
 
 ignore:
   - tests
+  - Compat
   - .github
   - .luacheckrc
   - README.md

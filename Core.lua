@@ -27,6 +27,11 @@ ns.title = "Guise"
 local function IsMasqueEnabled()
 	if not C_AddOns or not C_AddOns.GetAddOnEnableState then return false end
 	if C_AddOns.DoesAddOnExist and not C_AddOns.DoesAddOnExist("Masque") then return false end
+	-- Guise's own skin-pack loader is named "Masque"; that one doesn't count.
+	if C_AddOns.GetAddOnMetadata then
+		local ok, shim = pcall(C_AddOns.GetAddOnMetadata, "Masque", "X-Guise-Shim")
+		if ok and shim then return false end
+	end
 	local ok, state = pcall(C_AddOns.GetAddOnEnableState, "Masque", UnitName and UnitName("player"))
 	return ok and type(state) == "number" and state > 0
 end

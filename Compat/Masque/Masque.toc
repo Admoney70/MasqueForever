@@ -1,0 +1,7 @@
+## Interface: 16001, 120100, 120105
+## Title: Guise: Masque skin loader
+## Notes: Lets Masque skin packs load when Guise is used instead of Masque. This is NOT Masque. For personal use only; remove it if you install the real Masque.
+## Dependencies: !Guise
+## X-Guise-Shim: 1
+
+Shim.lua

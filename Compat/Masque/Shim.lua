@@ -1,0 +1,2 @@
+-- Intentionally empty. This add-on only exists so that skin packs declaring
+-- "## Dependencies: Masque" can load; Guise provides the API they use.

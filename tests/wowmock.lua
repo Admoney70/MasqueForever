@@ -36,9 +36,11 @@ function M.RunTimers()
 end
 
 M.addons = {}
+M.metadata = {}
 C_AddOns = {
 	DoesAddOnExist = function(name) return M.addons[name] ~= nil end,
 	GetAddOnEnableState = function(name) return M.addons[name] or 0 end,
+	GetAddOnMetadata = function(name, field) return M.metadata[name .. ":" .. field] end,
 }
 
 function hooksecurefunc(tbl, name, hook)
@@ -153,6 +155,16 @@ function Region:SetScrollChild(c) self._child = c end
 function Region:SetChecked(v) self._checked = v end
 function Region:GetChecked() return self._checked end
 function Region:Enable() self._enabled = true end
+function Region:SetColorTexture(r, g, b, a) self._texture = "color"; self._atlas = nil; self._color = { r, g, b, a or 1 } end
+-- Like Blizzard's DropdownButton: the generator runs immediately on setup.
+function Region:SetupMenu(gen)
+	self._gen = gen
+	self:GenerateMenu()
+end
+function Region:GenerateMenu()
+	local root = { CreateRadio = function(_, text, isSelected) isSelected() end }
+	self._gen(self, root)
+end
 function Region:Disable() self._enabled = false end
 
 Settings = {

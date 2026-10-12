@@ -47,7 +47,9 @@ Packaged builds made with the BigWigs packager are named correctly via `.pkgmeta
 ## Compatibility notes
 
 - If the real **Masque** is installed and enabled, Guise stands down so the two never fight.
-- Masque *skin packs* that declare `## Dependencies: Masque` in their TOC will not load without an add-on literally named Masque. The skin definitions themselves are compatible; they can be registered from any add-on that depends on Guise (or has it as an optional dependency).
+- **Masque skin packs** (Caith, Apathy, ...) declare `## Dependencies: Masque`, and the game won't load them unless an add-on folder named `Masque` exists. For personal use, copy `Compat/Masque` from this repository into your `AddOns` folder. It is an empty stub that depends on Guise and is **not** Masque; Guise recognises it and keeps running. Delete it if you install the real Masque. It is deliberately left out of packaged builds.
+- Guise understands the current Masque skin format: layer aliases (`SlotHighlight = "Checked"`), `DebuffBorder`/`EnchantBorder`, solid-colour layers (`UseColor` without a texture), offset-only text layers, and Masque's shared textures (backdrops, square/circle masks and cooldown edges are mapped to stand-ins).
+- On Midnight-era clients, some Blizzard-owned buttons (such as aura container buttons) report "secret" layout values. Guise skips those parts and skins the rest.
 - Forever's API is based on the modern client. Interface numbers for retail (`120100`, `120105`) are also listed, so the add-on loads there too.
 
 ## Development

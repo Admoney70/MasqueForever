@@ -334,11 +334,16 @@ local function ApplyTexture(st, layer, region, spec, button, xs, ys, color)
 	end
 	SetHidden(st, layer, region, false)
 
-	local texture, atlas = spec.Texture, spec.Atlas
+	local texture, atlas = ns.Texture(spec.Texture), spec.Atlas
 	if atlas then
 		region:SetAtlas(atlas, spec.UseAtlasSize)
 	elseif texture then
 		region:SetTexture(texture)
+	elseif spec.UseColor and spec.Texture == nil and region.SetColorTexture then
+		-- Masque convention: a colour with no texture is a solid fill.
+		local c = color or spec.Color or { 1, 1, 1, 1 }
+		region:SetColorTexture(c[1] or 1, c[2] or 1, c[3] or 1, c[4] or 1)
+		region:SetBlendMode(spec.BlendMode or "BLEND")
 	end
 
 	if texture or atlas then
@@ -390,6 +395,7 @@ local function ApplyIcon(st, region, spec, skin, button, xs, ys)
 	-- Skin-provided icon mask (round skins etc.).
 	local mask = spec.Mask or skin.Mask
 	if type(mask) == "table" then mask = mask.Texture end
+	mask = ns.Texture(mask)
 	if mask and region.AddMaskTexture and button.CreateMaskTexture then
 		local m = st.mask
 		if not m then
@@ -422,9 +428,10 @@ local function ApplyFrame(st, layer, region, spec, button, xs, ys, color)
 	Place(region, spec, button, xs, ys, true)
 
 	if isCooldown then
-		if spec.Texture and region.SetSwipeTexture then region:SetSwipeTexture(spec.Texture) end
-		if spec.EdgeTexture and region.SetEdgeTexture then region:SetEdgeTexture(spec.EdgeTexture) end
-		if spec.PulseTexture and region.SetBlingTexture then region:SetBlingTexture(spec.PulseTexture) end
+		local swipe, edge, bling = ns.Texture(spec.Texture), ns.Texture(spec.EdgeTexture), ns.Texture(spec.PulseTexture)
+		if swipe and region.SetSwipeTexture then region:SetSwipeTexture(swipe) end
+		if edge and region.SetEdgeTexture then region:SetEdgeTexture(edge) end
+		if bling and region.SetBlingTexture then region:SetBlingTexture(bling) end
 		local c = color or spec.Color
 		if c and region.SetSwipeColor then
 			region:SetSwipeColor(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 0.8)

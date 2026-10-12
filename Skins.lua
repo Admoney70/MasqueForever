@@ -74,8 +74,33 @@ local function Invalidate()
 	orderDirty = true
 end
 
+-- Type-specific layer names used by current Masque skins.
+local TYPE_LAYER = {
+	Border = { Debuff = "DebuffBorder", Enchant = "EnchantBorder" },
+}
+
+-- Masque's built-in text anchors; skins often give only offsets.
+local TEXT_DEFAULTS = {
+	HotKey = { Width = 36, JustifyH = "RIGHT", Point = "TOPRIGHT", RelPoint = "TOPRIGHT" },
+	Count = { Width = 36, JustifyH = "RIGHT", Point = "BOTTOMRIGHT", RelPoint = "BOTTOMRIGHT" },
+	Name = { Width = 36, JustifyH = "CENTER", Point = "BOTTOM", RelPoint = "BOTTOM" },
+	Duration = { Width = 36, JustifyH = "CENTER", Point = "TOP", RelPoint = "BOTTOM" },
+}
+
+-- A layer may be a table, or a string naming another layer
+-- (e.g. SlotHighlight = "Checked").
+local function LayerTable(skin, layer)
+	local spec = skin[layer]
+	for _ = 1, 5 do
+		if type(spec) ~= "string" then break end
+		spec = skin[spec]
+	end
+	return type(spec) == "table" and spec or nil
+end
+
 -- Returns the spec table for a layer of a skin, honouring Masque's
--- type-specific sub-tables (e.g. Border.Debuff) and the type fallbacks.
+-- type-specific variants (Border.Debuff, DebuffBorder, Backdrop.Item...)
+-- and the type fallbacks.
 function ns.ResolveLayer(skinID, skin, layer, btype)
 	local c = cache[skinID]
 	if not c then
@@ -87,8 +112,9 @@ function ns.ResolveLayer(skinID, skin, layer, btype)
 	local spec = c[key]
 	if spec ~= nil then return spec or nil end
 
-	spec = skin[layer]
-	if type(spec) == "table" then
+	local alt = TYPE_LAYER[layer] and btype and TYPE_LAYER[layer][btype]
+	spec = alt and LayerTable(skin, alt) or LayerTable(skin, layer)
+	if spec then
 		local t = btype
 		while t do
 			local sub = spec[t]
@@ -98,12 +124,54 @@ function ns.ResolveLayer(skinID, skin, layer, btype)
 			end
 			t = TYPE_PARENT[t]
 		end
-	else
-		spec = nil
+
+		local defaults = TEXT_DEFAULTS[layer]
+		if defaults then
+			local merged = {}
+			for k, v in pairs(defaults) do merged[k] = v end
+			for k, v in pairs(spec) do merged[k] = v end
+			-- An explicit Point without RelPoint means "same as Point".
+			if spec.Point and not spec.RelPoint then merged.RelPoint = nil end
+			spec = merged
+		end
 	end
 
 	c[key] = spec or false
 	return spec
+end
+
+-- Masque skins reference textures that ship inside Masque itself. Map them
+-- to equivalents so those skins work without it.
+local MASQUE_TEXTURES = "^[Ii]nterface[\\/][Aa]dd[Oo]ns[\\/][Mm]asque[\\/][Tt]extures[\\/](.+)$"
+local OWN_TEXTURES = [[Interface\AddOns\]] .. ns.name .. [[\Textures\]]
+local WHITE = [[Interface\Buttons\WHITE8x8]]
+local texCache = {}
+
+function ns.Texture(path)
+	if type(path) ~= "string" then return path end
+	local mapped = texCache[path]
+	if mapped ~= nil then return mapped or nil end
+
+	local rest = path:match(MASQUE_TEXTURES)
+	if not rest then
+		mapped = path
+	else
+		rest = rest:lower():gsub("/", "\\")
+		local shape, file = rest:match("^(.-)\\([^\\]+)$")
+		file = file or rest
+		if shape == "backdrop" then
+			mapped = OWN_TEXTURES .. "Backdrop"
+		elseif file == "mask" or file == "autocast-mask" then
+			mapped = shape == "circle" and [[Interface\CharacterFrame\TempPortraitAlphaMask]] or WHITE
+		elseif file == "edge" then
+			mapped = [[Interface\Cooldown\edge]]
+		else
+			mapped = false -- unknown: leave the game's art in place
+		end
+	end
+
+	texCache[path] = mapped
+	return mapped or nil
 end
 
 function ns.AddSkin(id, data, replace)
