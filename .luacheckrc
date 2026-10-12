@@ -6,5 +6,5 @@ globals = { "GuiseDB", "Guise", "Guise_OnAddonCompartmentClick", "SLASH_GUISE1",
 read_globals = {
 	"LibStub", "CreateFrame", "C_AddOns", "C_Timer", "UnitName", "InCombatLockdown",
 	"hooksecurefunc", "geterrorhandler", "issecretvalue", "wipe", "strmatch", "GameTooltip", "GameTooltip_Hide",
-	"Settings", "InterfaceOptions_AddCategory", "InterfaceOptionsFrame_OpenToCategory", "ReloadUI",
+	"Settings", "ColorPickerFrame", "InterfaceOptions_AddCategory", "InterfaceOptionsFrame_OpenToCategory", "ReloadUI",
 }

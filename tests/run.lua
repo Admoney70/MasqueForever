@@ -293,7 +293,8 @@ test("Masque-format skin pack features", function()
 	local b = M.NewActionButton("PackButton", 36)
 	g:AddButton(b, nil, "Action")
 	eq(b:GetPushedTexture():GetTexture(), "color", "solid colour fill")
-	eq(b:GetPushedTexture()._color[4], 0.5)
+	eq(b:GetPushedTexture()._fill[4], 0.5)
+	eq(b:GetPushedTexture()._color[4], 1, "no double tint")
 	local hk = b.HotKey
 	local p, _, rp, x = hk:GetPoint(1)
 	eq(p, "TOPRIGHT", "default text anchor"); eq(rp, "TOPRIGHT"); eq(x, -2)
@@ -311,6 +312,66 @@ test("Masque-format skin pack features", function()
 	g:AddButton(item, nil, "Item")
 	eq(item.IconBorder:GetTexture(), "pack-border", "string alias")
 	eq(item.SlotHighlightTexture:GetTexture(), "pack-border", "string alias to Checked")
+end)
+
+test("custom frame colour (Caith-style Normal layer)", function()
+	MSQ:AddSkin("Framed", {
+		Normal = { Texture = "framed-normal", Color = { 0.3, 0.3, 0.3, 1 }, Width = 42, Height = 42 },
+		Border = { Texture = "framed-border", Width = 42, Height = 42 },
+	})
+	local g = MSQ:Group("ColorTest", "Bar")
+	ns.SetOption(g, "Inherit", false)
+	ns.SetOption(g, "SkinID", "Framed")
+	local b = M.NewActionButton("ColorButton", 36)
+	b.Border:SetVertexColor(0, 1, 0, 0.35) -- game's "equipped" green
+	g:AddButton(b)
+	local n = b:GetNormalTexture()
+	eq(n._color[1], 0.3, "skin colour by default")
+	local r = g:GetColor("Normal")
+	eq(r, 0.3, "GetColor reports skin colour")
+
+	g:SetColor("Normal", 1, 0, 0, 1)
+	M.RunTimers()
+	eq(n._color[1], 1, "custom colour applied"); eq(n._color[2], 0)
+
+	g:SetColor("Border", 0, 0, 1, 1)
+	M.RunTimers()
+	eq(b.Border._color[3], 1, "override beats game colour")
+	g:SetColor("Border", nil)
+	M.RunTimers()
+	eq(b.Border._color[2], 1, "game colour restored after reset")
+
+	g:SetColor("Normal", nil)
+	M.RunTimers()
+	eq(n._color[1], 0.3, "reset to skin colour")
+end)
+
+test("colour popup and picker", function()
+	local panel
+	for _, f in ipairs(M.frames) do if f.name == "Guise" then panel = f end end
+	panel:Show()
+	panel._scripts.OnShow(panel)
+	local g = MSQ:Group("ColorTest", "Bar")
+	ns.ShowColors(g)
+	local popup = _G.GuiseColorPopup
+	assert(popup and popup:IsShown(), "popup shown")
+	local line = popup.lines[1]
+	eq(line.layer, "Normal")
+	eq(line.reset:IsEnabled(), false, "reset disabled without override")
+	line.swatch._scripts.OnClick(line.swatch)
+	ColorPickerFrame:Pick(0, 0.5, 1, 1)
+	local r, gg, bb = g:GetColor("Normal")
+	eq(r, 0); eq(gg, 0.5); eq(bb, 1)
+	eq(line.reset:IsEnabled(), true, "reset enabled")
+	ColorPickerFrame:Cancel()
+	eq(g:GetColor("Normal"), 0.3, "cancel restores skin colour")
+	line.swatch._scripts.OnClick(line.swatch)
+	ColorPickerFrame:Pick(1, 1, 0, 1)
+	line.reset._scripts.OnClick(line.reset)
+	eq(g:GetColor("Normal"), 0.3, "reset button")
+	panel._scripts.OnHide(panel)
+	eq(popup:IsShown(), false, "popup closes with panel")
+	panel:Hide()
 end)
 
 local function LoadCoreWith(setup)

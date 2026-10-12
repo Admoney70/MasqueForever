@@ -12,6 +12,7 @@ Guise restyles action buttons, pet/stance bars, bag buttons and any add-on butto
 - **Skins the default UI.** All eight action bars, the pet, stance and possess bars, the extra action button and the bag buttons. Each bar is its own group.
 - **Built-in skins:** `Classic` (the original 2004 quickslot art, the default), `Clean` (thin outline, trimmed icons), `Zoomed` (edge-to-edge icons), and `Blizzard` (leave the game's art alone).
 - **Per-group settings** with inheritance: Global → Add-on → Bar. Set a skin once on Global, or untick *Inherit* on any group to style it separately. Backdrop, Gloss, Shadow and Off toggles per group.
+- **Custom colours** per group: click *Colors* on a group's row to recolour the frame/border, backdrop, highlight, checked, pressed, equipped border, flash, gloss, shadow and cooldown swipe. Reset returns a layer to the skin's colour.
 - **Exact restore.** Turning a skin off puts every region back to precisely what the game had, including art the game changed while the skin was active.
 
 ## How it is optimized

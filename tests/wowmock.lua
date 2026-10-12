@@ -159,7 +159,19 @@ function Region:SetScrollChild(c) self._child = c end
 function Region:SetChecked(v) self._checked = v end
 function Region:GetChecked() return self._checked end
 function Region:Enable() self._enabled = true end
-function Region:SetColorTexture(r, g, b, a) self._texture = "color"; self._atlas = nil; self._color = { r, g, b, a or 1 } end
+function Region:SetFrameStrata() end
+function Region:EnableMouse() end
+function Region:IsEnabled() return self._enabled ~= false end
+
+ColorPickerFrame = {
+	SetupColorPickerAndShow = function(self, info) self.info = info; self.r, self.g, self.b, self.a = info.r, info.g, info.b, info.opacity end,
+	GetColorRGB = function(self) return self.r, self.g, self.b end,
+	GetColorAlpha = function(self) return self.a end,
+	-- test helper: simulate the user dragging to a colour
+	Pick = function(self, r, g, b, a) self.r, self.g, self.b, self.a = r, g, b, a; self.info.swatchFunc() end,
+	Cancel = function(self) self.info.cancelFunc(self.info) end,
+}
+function Region:SetColorTexture(r, g, b, a) self._texture = "color"; self._atlas = nil; self._fill = { r, g, b, a or 1 } end
 -- Like Blizzard's DropdownButton: the generator runs immediately on setup.
 function Region:SetupMenu(gen)
 	self._gen = gen

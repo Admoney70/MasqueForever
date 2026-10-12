@@ -272,7 +272,8 @@ local function Restore(st, layer)
 	end
 	if kind == "texture" or kind == "icon" then
 		region:SetTexCoord(unpack(o.coords))
-		if kind == "texture" and not KEEP_COLOR[layer] then
+		if kind == "texture" and (not KEEP_COLOR[layer] or st.colored[layer]) then
+			st.colored[layer] = nil
 			region:SetVertexColor(unpack(o.color))
 		end
 		if o.blend then region:SetBlendMode(o.blend) end
@@ -335,6 +336,7 @@ local function ApplyTexture(st, layer, region, spec, button, xs, ys, color)
 	SetHidden(st, layer, region, false)
 
 	local texture, atlas = ns.Texture(spec.Texture), spec.Atlas
+	local solid = false
 	if atlas then
 		region:SetAtlas(atlas, spec.UseAtlasSize)
 	elseif texture then
@@ -344,6 +346,8 @@ local function ApplyTexture(st, layer, region, spec, button, xs, ys, color)
 		local c = color or spec.Color or { 1, 1, 1, 1 }
 		region:SetColorTexture(c[1] or 1, c[2] or 1, c[3] or 1, c[4] or 1)
 		region:SetBlendMode(spec.BlendMode or "BLEND")
+		region:SetVertexColor(1, 1, 1, 1)
+		solid = true
 	end
 
 	if texture or atlas then
@@ -353,13 +357,25 @@ local function ApplyTexture(st, layer, region, spec, button, xs, ys, color)
 			region:SetTexCoord(0, 1, 0, 1)
 		end
 		region:SetBlendMode(spec.BlendMode or "BLEND")
-		if not KEEP_COLOR[layer] or spec.UseColor then
+	end
+
+	-- Colour: a user-chosen colour always wins. Otherwise layers whose colour
+	-- carries game state keep the game's colour, and the rest use the skin's.
+	if not solid then
+		local colored = st.colored
+		if KEEP_COLOR[layer] and not spec.UseColor and not color then
+			if colored[layer] then
+				region:SetVertexColor(unpack(st.orig[layer].color))
+				colored[layer] = nil
+			end
+		elseif texture or atlas or color then
 			local c = color or spec.Color
 			if c then
 				region:SetVertexColor(c[1] or 1, c[2] or 1, c[3] or 1, c[4] or 1)
 			else
 				region:SetVertexColor(1, 1, 1, 1)
 			end
+			if KEEP_COLOR[layer] then colored[layer] = true end
 		end
 	end
 
@@ -728,7 +744,7 @@ function ns.AttachButton(button, group, regions, btype, strict)
 		-- Re-adding: discard old state cleanly before re-collecting regions.
 		Unskin(st)
 	else
-		st = { orig = {}, hidden = {}, created = {}, broken = {} }
+		st = { orig = {}, hidden = {}, created = {}, broken = {}, colored = {} }
 		state[button] = st
 	end
 
