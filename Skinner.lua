@@ -314,7 +314,11 @@ end
 
 local function SetHidden(st, layer, region, hidden)
 	if hidden then
-		if not st.hidden[layer] then
+		if st.hidden[layer] then
+			-- Keep it hidden if the game reset its alpha.
+			local alpha = region:GetAlpha()
+			if not issecretvalue(alpha) and alpha ~= 0 then region:SetAlpha(0) end
+		else
 			local alpha = region:GetAlpha()
 			if issecretvalue(alpha) then return end
 			st.hidden[layer] = alpha
@@ -329,11 +333,15 @@ end
 local function ApplyTexture(st, layer, region, spec, button, xs, ys, color)
 	if not Snapshot(st, layer, region, "texture") then return end
 
-	if spec.Hide then
-		SetHidden(st, layer, region, true)
-		return
+	-- Textures Guise created are shown/hidden by their caller; st.hidden
+	-- tracks only the game's regions (e.g. the hidden game Normal texture).
+	if st.created[layer] ~= region then
+		if spec.Hide then
+			SetHidden(st, layer, region, true)
+			return
+		end
+		SetHidden(st, layer, region, false)
 	end
-	SetHidden(st, layer, region, false)
 
 	local texture, atlas = ns.Texture(spec.Texture), spec.Atlas
 	local solid = false
@@ -597,19 +605,35 @@ function ApplyLayer(button, st, layer)
 	local region = st.regions[layer]
 
 	if IS_TEXTURE[layer] then
-		if not region and layer == "Normal" and spec and not spec.Hide then
-			-- The button has no normal texture; give it one we own.
-			region = st.created.Normal
-			if not region then
-				region = button:CreateTexture(nil, "ARTWORK", nil, 1)
-				st.created.Normal = region
+		if layer == "Normal" and spec and not spec.Hide and not spec.UseStates then
+			-- Like Masque, draw the frame on a texture we own and hide the
+			-- game's. The game recolours its normal texture whenever a
+			-- button's usable/mana state changes (and swaps its art on
+			-- Edit Mode/bar art updates), which would wipe the skin's colour
+			-- and any custom colour.
+			if region then
+				SetHidden(st, layer, region, true)
+				HookRegion(button, st, layer, region)
 			end
-			region:Show()
+			local own = st.created.Normal
+			if not own then
+				own = button:CreateTexture(nil, "ARTWORK", nil, 1)
+				st.created.Normal = own
+			end
+			ApplyTexture(st, layer, own, spec, button, xs, ys, LayerColor(st, layer))
+			if not spec.DrawLayer then own:SetDrawLayer("ARTWORK", 1) end
+			own:Show()
+			return
+		end
+		local own = st.created.Normal
+		if own and layer == "Normal" then
+			own:Hide()
+			if st.orig.Normal and st.orig.Normal.region == own then st.orig.Normal = nil end
 		end
 		if not region then return end
 		if spec then
 			ApplyTexture(st, layer, region, spec, button, xs, ys, LayerColor(st, layer))
-			if region ~= st.created.Normal then HookRegion(button, st, layer, region) end
+			HookRegion(button, st, layer, region)
 		else
 			if st.hidden[layer] then SetHidden(st, layer, region, false) end
 			Restore(st, layer)
@@ -770,5 +794,7 @@ function ns.GetButtonRegion(button, layer)
 	local st = state[button]
 	if not st then return nil end
 	layer = REGION_ALIAS[layer] or layer
-	return st.created[layer] or st.regions[layer]
+	local own = st.created[layer]
+	if own and (layer ~= "Normal" or (st.active and own:IsShown())) then return own end
+	return st.regions[layer]
 end
