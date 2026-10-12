@@ -9,7 +9,7 @@
 local ADDON, ns = ...
 
 local C_AddOns, C_Timer = C_AddOns, C_Timer
-local pairs, next, pcall, print, type = pairs, next, pcall, print, type
+local pairs, ipairs, next, pcall, print, type = pairs, ipairs, next, pcall, print, type
 local InCombatLockdown = InCombatLockdown
 
 ns.name = ADDON
@@ -24,25 +24,45 @@ ns.title = "Guise"
 -- installed and enabled, Guise stands down completely.
 ----------------------------------------------------------------------
 
+-- Guise's optional skin-pack loader (Compat/Masque) is an add-on named
+-- "Masque". Recognise it by any of: it depends on Guise (the real Masque
+-- never does), its title, or its X-Guise-Shim field. Each lookup is guarded
+-- because not every field is available for add-ons that have not loaded yet.
+local function IsGuiseStub(name)
+	if C_AddOns.GetAddOnDependencies then
+		local ok, deps = pcall(function() return { C_AddOns.GetAddOnDependencies(name) } end)
+		if ok then
+			for _, dep in ipairs(deps) do
+				if dep == ADDON then return true end
+			end
+		end
+	end
+	if C_AddOns.GetAddOnInfo then
+		local ok, _, title = pcall(C_AddOns.GetAddOnInfo, name)
+		if ok and type(title) == "string" and title:find("Guise", 1, true) then return true end
+	end
+	if C_AddOns.GetAddOnMetadata then
+		local ok, shim = pcall(C_AddOns.GetAddOnMetadata, name, "X-Guise-Shim")
+		if ok and shim then return true end
+	end
+	return false
+end
+
 local function IsMasqueEnabled()
 	if not C_AddOns or not C_AddOns.GetAddOnEnableState then return false end
 	if C_AddOns.DoesAddOnExist and not C_AddOns.DoesAddOnExist("Masque") then return false end
-	-- Guise's own skin-pack loader is named "Masque"; that one doesn't count.
-	if C_AddOns.GetAddOnMetadata then
-		local ok, shim = pcall(C_AddOns.GetAddOnMetadata, "Masque", "X-Guise-Shim")
-		if ok and shim then return false end
-	end
+	if IsGuiseStub("Masque") then return false end
 	local ok, state = pcall(C_AddOns.GetAddOnEnableState, "Masque", UnitName and UnitName("player"))
 	return ok and type(state) == "number" and state > 0
 end
 
 local MSQ
 if IsMasqueEnabled() then
-	ns.disabled = "Masque is enabled; Guise is standing down."
+	ns.disabled = "Masque is installed and enabled, so Guise is switched off. Disable Masque (or delete it, if it is Guise's Compat/Masque folder from an older version) to use Guise."
 else
 	MSQ = LibStub:NewLibrary("Masque", 1)
 	if not MSQ then
-		ns.disabled = "Another add-on already provides the Masque API; Guise is standing down."
+		ns.disabled = "Another add-on already provides the Masque API, so Guise is switched off."
 	end
 end
 
@@ -58,10 +78,15 @@ function _G.Guise_OnAddonCompartmentClick()
 end
 
 if ns.disabled then
+	-- Make standing down obvious: a chat line at login and a working /guise.
 	events:RegisterEvent("PLAYER_LOGIN")
 	events:SetScript("OnEvent", function()
-		print("|cff33ff99Guise|r: " .. ns.disabled)
+		print("|cffff5555Guise is not running:|r " .. ns.disabled)
 	end)
+	SLASH_GUISE1 = "/guise"
+	SlashCmdList.GUISE = function()
+		print("|cffff5555Guise is not running:|r " .. ns.disabled)
+	end
 	return
 end
 

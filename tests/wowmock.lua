@@ -37,10 +37,14 @@ end
 
 M.addons = {}
 M.metadata = {}
+M.deps = {}
+M.titles = {}
 C_AddOns = {
 	DoesAddOnExist = function(name) return M.addons[name] ~= nil end,
 	GetAddOnEnableState = function(name) return M.addons[name] or 0 end,
 	GetAddOnMetadata = function(name, field) return M.metadata[name .. ":" .. field] end,
+	GetAddOnDependencies = function(name) return unpack(M.deps[name] or {}) end,
+	GetAddOnInfo = function(name) return name, M.titles[name] end,
 }
 
 function hooksecurefunc(tbl, name, hook)

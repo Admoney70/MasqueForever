@@ -313,16 +313,37 @@ test("Masque-format skin pack features", function()
 	eq(item.SlotHighlightTexture:GetTexture(), "pack-border", "string alias to Checked")
 end)
 
-test("skin-pack loader stub is not mistaken for Masque", function()
+local function LoadCoreWith(setup)
 	M.addons.Masque = 2
-	M.metadata["Masque:X-Guise-Shim"] = "1"
+	setup()
 	local other = {}
 	LibStub.minors.Masque = nil
-	local chunk = assert(loadfile("Core.lua"))
-	chunk("!Guise", other)
-	assert(not other.disabled, "should not stand down for the stub")
-	M.addons.Masque = nil
-	M.metadata["Masque:X-Guise-Shim"] = nil
+	assert(loadfile("Core.lua"))("!Guise", other)
+	M.addons.Masque, M.metadata = nil, {}
+	M.deps, M.titles = {}, {}
+	return other
+end
+
+test("stub recognised by its dependency on Guise", function()
+	-- Metadata unavailable for unloaded add-ons: must still be recognised.
+	local other = LoadCoreWith(function() M.deps.Masque = { "!Guise" } end)
+	assert(not other.disabled, other.disabled)
+end)
+
+test("stub recognised by its title", function()
+	local other = LoadCoreWith(function() M.titles.Masque = "Guise: Masque skin loader" end)
+	assert(not other.disabled, other.disabled)
+end)
+
+test("stub recognised by its metadata", function()
+	local other = LoadCoreWith(function() M.metadata["Masque:X-Guise-Shim"] = "1" end)
+	assert(not other.disabled, other.disabled)
+end)
+
+test("standing down is announced and /guise explains", function()
+	local other = LoadCoreWith(function() M.titles.Masque = "Masque" end)
+	assert(other.disabled, "real Masque should win")
+	SlashCmdList.GUISE("")
 end)
 
 test("stands down when Masque is enabled", function()
