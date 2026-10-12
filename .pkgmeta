@@ -1,0 +1,7 @@
+package-as: "!Guise"
+
+ignore:
+  - tests
+  - .github
+  - .luacheckrc
+  - README.md

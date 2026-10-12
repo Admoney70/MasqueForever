@@ -1,0 +1,15 @@
+name: test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua
+        run: sudo apt-get update && sudo apt-get install -y lua5.1 lua-check
+      - name: Lint
+        run: luacheck .
+      - name: Unit tests
+        run: lua5.1 tests/run.lua

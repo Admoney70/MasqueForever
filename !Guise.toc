@@ -1,0 +1,19 @@
+## Interface: 16001, 120100, 120105
+## Title: Guise
+## Notes: Lightweight, Masque-compatible button skinning engine for World of Warcraft: Forever.
+## Author: admoney70
+## Version: @project-version@
+## SavedVariables: GuiseDB
+## IconTexture: Interface\Icons\Ability_Rogue_Disguise
+## AddonCompartmentFunc: Guise_OnAddonCompartmentClick
+## Category: Action Bars
+
+Libs\LibStub\LibStub.lua
+
+Core.lua
+Skins.lua
+Skins\Builtin.lua
+Skinner.lua
+Groups.lua
+Blizzard.lua
+Options.lua
