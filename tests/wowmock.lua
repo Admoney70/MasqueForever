@@ -14,6 +14,15 @@ function ReloadUI() end
 GameTooltip_Hide = function() end
 function InCombatLockdown() return M.combat end
 function UnitName() return "Tester" end
+-- Secret values: an opaque object that errors like the real thing when used
+-- as a number.
+M.SECRET = setmetatable({}, {
+	__lt = function() error("attempt to compare a secret value") end,
+	__le = function() error("attempt to compare a secret value") end,
+	__concat = function() error("attempt to concatenate a secret value") end,
+})
+function issecretvalue(v) return v == M.SECRET end
+M.errors = {}
 function geterrorhandler() return function(e) error(e, 0) end end
 
 M.timers = {}

@@ -16,8 +16,31 @@
 local _, ns = ...
 if ns.disabled then return end
 
-local pairs, ipairs, type, unpack, pcall, tostring = pairs, ipairs, type, unpack, pcall, tostring
+local pairs, ipairs, type, unpack, pcall, tostring, select = pairs, ipairs, type, unpack, pcall, tostring, select
 local hooksecurefunc = hooksecurefunc
+
+-- Midnight-era clients (including Forever) return "secret values" from some
+-- regions, notably Blizzard's aura container buttons. Secrets cannot be
+-- compared, used in arithmetic or as loop bounds, so anything that returns
+-- one is treated as off limits.
+local issecretvalue = issecretvalue or function() return false end
+
+local function AnySecret(...)
+	for i = 1, select("#", ...) do
+		if issecretvalue((select(i, ...))) then return true end
+	end
+	return false
+end
+
+-- Errors are reported once per message, not once per button.
+local reported = {}
+local function Report(err)
+	err = tostring(err)
+	if reported[err] then return end
+	reported[err] = true
+	local handler = geterrorhandler and geterrorhandler()
+	if handler then handler(err) end
+end
 
 local BASE = 36
 local FULL_COORDS = { 0, 1, 0, 1 }
@@ -167,17 +190,40 @@ end
 -- Snapshot / restore
 ----------------------------------------------------------------------
 
+-- Records a region's original state. Returns nil (and the layer is left
+-- alone) if the region is restricted or reports secret values, since such a
+-- region could neither be restyled safely nor restored.
+local Inspect -- forward
+
 local function Snapshot(st, layer, region, kind)
 	local o = st.orig[layer]
 	if o and o.region == region then return o end
 
-	o = { region = region, kind = kind, alpha = region:GetAlpha() }
+	o = Inspect(region, kind)
+	if not o then
+		st.broken[layer] = true
+		return nil
+	end
+	st.orig[layer] = o
+	return o
+end
+
+function Inspect(region, kind)
+	if region.IsAnchoringRestricted and region:IsAnchoringRestricted() then return nil end
+
+	local alpha = region:GetAlpha()
+	local numPoints = region:GetNumPoints()
+	local w, h = region:GetSize()
+	if AnySecret(alpha, numPoints, w, h) then return nil end
+
+	local o = { region = region, kind = kind, alpha = alpha, w = w, h = h }
 	local points = {}
-	for i = 1, region:GetNumPoints() do
-		points[i] = { region:GetPoint(i) }
+	for i = 1, numPoints do
+		local p = { region:GetPoint(i) }
+		if AnySecret(unpack(p, 1, 5)) then return nil end
+		points[i] = p
 	end
 	o.points = points
-	o.w, o.h = region:GetSize()
 
 	if kind == "texture" or kind == "icon" then
 		o.atlas = region.GetAtlas and region:GetAtlas() or nil
@@ -186,12 +232,16 @@ local function Snapshot(st, layer, region, kind)
 		o.color = { region:GetVertexColor() }
 		o.blend = region:GetBlendMode()
 		o.layer, o.sublevel = region:GetDrawLayer()
+		if AnySecret(o.atlas, o.texture, o.blend, o.layer, o.sublevel)
+			or AnySecret(unpack(o.coords, 1, 8)) or AnySecret(unpack(o.color, 1, 4)) then
+			return nil
+		end
 	elseif kind == "text" then
 		o.justifyH = region:GetJustifyH()
 		o.justifyV = region:GetJustifyV()
+		if AnySecret(o.justifyH, o.justifyV) then return nil end
 	end
 
-	st.orig[layer] = o
 	return o
 end
 
@@ -264,7 +314,9 @@ end
 local function SetHidden(st, layer, region, hidden)
 	if hidden then
 		if not st.hidden[layer] then
-			st.hidden[layer] = region:GetAlpha()
+			local alpha = region:GetAlpha()
+			if issecretvalue(alpha) then return end
+			st.hidden[layer] = alpha
 			region:SetAlpha(0)
 		end
 	elseif st.hidden[layer] then
@@ -274,7 +326,7 @@ local function SetHidden(st, layer, region, hidden)
 end
 
 local function ApplyTexture(st, layer, region, spec, button, xs, ys, color)
-	Snapshot(st, layer, region, "texture")
+	if not Snapshot(st, layer, region, "texture") then return end
 
 	if spec.Hide then
 		SetHidden(st, layer, region, true)
@@ -313,12 +365,13 @@ local function ApplyTexture(st, layer, region, spec, button, xs, ys, color)
 	Place(region, spec, button, xs, ys, true)
 
 	local o = st.orig[layer]
-	o.skinAtlas = region.GetAtlas and region:GetAtlas() or nil
-	o.skinTexture = region:GetTexture()
+	local nowAtlas, nowTexture = region.GetAtlas and region:GetAtlas() or nil, region:GetTexture()
+	if AnySecret(nowAtlas, nowTexture) then nowAtlas, nowTexture = nil, nil end
+	o.skinAtlas, o.skinTexture = nowAtlas, nowTexture
 end
 
 local function ApplyIcon(st, region, spec, skin, button, xs, ys)
-	Snapshot(st, "Icon", region, "icon")
+	if not Snapshot(st, "Icon", region, "icon") then return end
 
 	-- Modern action buttons round their icons with a mask; skins expect the
 	-- raw square icon.
@@ -357,7 +410,7 @@ local function ApplyIcon(st, region, spec, skin, button, xs, ys)
 end
 
 local function ApplyText(st, layer, region, spec, button, xs, ys)
-	Snapshot(st, layer, region, "text")
+	if not Snapshot(st, layer, region, "text") then return end
 	if spec.JustifyH then region:SetJustifyH(spec.JustifyH) end
 	if spec.JustifyV then region:SetJustifyV(spec.JustifyV) end
 	Place(region, spec, button, xs, ys, false)
@@ -365,7 +418,7 @@ end
 
 local function ApplyFrame(st, layer, region, spec, button, xs, ys, color)
 	local isCooldown = region:GetObjectType() == "Cooldown"
-	Snapshot(st, layer, region, isCooldown and "cooldown" or "frame")
+	if not Snapshot(st, layer, region, isCooldown and "cooldown" or "frame") then return end
 	Place(region, spec, button, xs, ys, true)
 
 	if isCooldown then
@@ -390,7 +443,7 @@ local ApplyLayer -- forward
 local function Reapply(button, layer, refetch)
 	if applying then return end
 	local st = state[button]
-	if not st or not st.active then return end
+	if not st or not st.active or st.broken[layer] then return end
 
 	if refetch then
 		local getter = STATE_GETTERS[layer]
@@ -410,7 +463,7 @@ local function Reapply(button, layer, refetch)
 		local region = o.region
 		local atlas = region.GetAtlas and region:GetAtlas() or nil
 		local texture = region:GetTexture()
-		if atlas ~= o.skinAtlas or texture ~= o.skinTexture then
+		if not AnySecret(atlas, texture) and (atlas ~= o.skinAtlas or texture ~= o.skinTexture) then
 			o.atlas, o.texture = atlas, texture
 		end
 	end
@@ -419,8 +472,8 @@ local function Reapply(button, layer, refetch)
 	local ok, err = pcall(ApplyLayer, button, st, layer)
 	applying = false
 	if not ok then
-		local handler = geterrorhandler and geterrorhandler()
-		if handler then handler(err) end
+		st.broken[layer] = true
+		Report(err)
 	end
 end
 
@@ -565,7 +618,11 @@ local function Unskin(st)
 
 	applying = true
 	for layer in pairs(st.orig) do
-		Restore(st, layer)
+		local ok, err = pcall(Restore, st, layer)
+		if not ok then
+			st.orig[layer] = nil
+			Report(err)
+		end
 	end
 	for layer, alpha in pairs(st.hidden) do
 		local region = st.regions[layer]
@@ -608,6 +665,7 @@ function ns.SkinButton(button, force)
 	end
 
 	local w, h = button:GetSize()
+	if AnySecret(w, h) then w, h = BASE, BASE end
 	local sig = ns.epoch .. ":" .. skinID .. ":" .. tostring(w) .. "x" .. tostring(h)
 	if not force and st.sig == sig then return end
 
@@ -624,22 +682,32 @@ function ns.SkinButton(button, force)
 	st.noPulse = ns.GetOption(group, "Pulse") == false
 	st.active = true
 
+	-- Each layer is isolated: a region the game refuses to let us touch is
+	-- skipped from then on without affecting the rest of the button.
 	applying = true
-	local ok, err = pcall(function()
-		for i = 1, #ALL_LAYERS do
-			ApplyLayer(button, st, ALL_LAYERS[i])
+	local broken = st.broken
+	for i = 1, #ALL_LAYERS do
+		local layer = ALL_LAYERS[i]
+		if not broken[layer] then
+			local ok, err = pcall(ApplyLayer, button, st, layer)
+			if not ok then
+				broken[layer] = true
+				Report(err)
+			end
 		end
-		for i = 1, #HIDE_WHEN_SKINNED do
-			local layer = HIDE_WHEN_SKINNED[i]
-			local region = st.regions[layer]
-			if region then SetHidden(st, layer, region, true) end
-		end
-	end)
-	applying = false
-	if not ok then
-		local handler = geterrorhandler and geterrorhandler()
-		if handler then handler(err) end
 	end
+	for i = 1, #HIDE_WHEN_SKINNED do
+		local layer = HIDE_WHEN_SKINNED[i]
+		local region = st.regions[layer]
+		if region and not broken[layer] then
+			local ok, err = pcall(SetHidden, st, layer, region, true)
+			if not ok then
+				broken[layer] = true
+				Report(err)
+			end
+		end
+	end
+	applying = false
 
 	InstallButtonHooks(button, st)
 end
@@ -653,13 +721,14 @@ function ns.AttachButton(button, group, regions, btype, strict)
 		-- Re-adding: discard old state cleanly before re-collecting regions.
 		Unskin(st)
 	else
-		st = { orig = {}, hidden = {}, created = {} }
+		st = { orig = {}, hidden = {}, created = {}, broken = {} }
 		state[button] = st
 	end
 
 	st.group = group
 	st.type = btype or ns.GuessType(button)
 	st.regions = ns.CollectRegions(button, regions, strict)
+	st.broken = {}
 	st.sig = nil
 	group.Buttons[button] = st.type
 	ns.SkinButton(button, true)

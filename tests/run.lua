@@ -235,6 +235,26 @@ test("un-inheriting copies colours", function()
 	eq(r, 1, "parent colour untouched")
 end)
 
+test("aura buttons with secret layout values", function()
+	-- Mirrors Blizzard aura container buttons in Midnight-era clients: some
+	-- regions report secret anchors and the button size is secret.
+	local b = M.NewActionButton(nil, 20)
+	b.cooldown.GetNumPoints = function() return M.SECRET end
+	b.Count:SetPoint("CENTER", b, "CENTER", 0, 0)
+	b.Count.GetPoint = function() return "CENTER", M.SECRET, "CENTER", 0, 0 end
+	b.GetSize = function() return M.SECRET, M.SECRET end
+	local g = MSQ:Group("MiniAurasTest", "Important Auras")
+	g:AddButton(b, nil, "Aura")
+	local st = ns.state[b]
+	assert(st.active, "skinned")
+	assert(st.broken.Cooldown and st.broken.Count, "restricted layers skipped")
+	eq(b:GetNormalTexture():GetTexture(), [[Interface\Buttons\UI-Quickslot2]], "other layers still skinned")
+	g:ReSkin(true)
+	ns.SetOption(MSQ:Group("MiniAurasTest"), "Disabled", true)
+	M.RunTimers()
+	eq(st.active, false, "unskins cleanly")
+end)
+
 test("stands down when Masque is enabled", function()
 	M.addons.Masque = 2
 	local other = {}
