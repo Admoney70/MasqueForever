@@ -162,6 +162,7 @@ function Region:Enable() self._enabled = true end
 function Region:SetFrameStrata() end
 function Region:EnableMouse() end
 function Region:IsEnabled() return self._enabled ~= false end
+function Region:SetMotionScriptsWhileDisabled() end
 
 ColorPickerFrame = {
 	SetupColorPickerAndShow = function(self, info) self.info = info; self.r, self.g, self.b, self.a = info.r, info.g, info.b, info.opacity end,

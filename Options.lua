@@ -11,6 +11,15 @@ local pairs, ipairs, sort, format, wipe = pairs, ipairs, table.sort, string.form
 local ROW_HEIGHT = 30
 local INDENT = 18
 
+-- Row layout (x offsets from the row's left edge). Kept compact so the whole
+-- row fits the Settings canvas: checkboxes carry no text of their own and are
+-- labelled by a column header above the list instead.
+local LABEL_WIDTH = 146
+local SKIN_X, SKIN_WIDTH = 150, 120
+local COLORS_X, COLORS_WIDTH = 276, 58
+local CHECK_X, CHECK_STEP = 342, 52
+local CHECK_COLUMNS = { "Inherit", "Backdrop", "Gloss", "Shadow", "Off" }
+
 local panel, category, scrollChild
 local rows = {}
 
@@ -40,10 +49,12 @@ end
 local function CreateCheck(parent, label, tooltip, onClick)
 	local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
 	cb:SetSize(24, 24)
-	local text = cb:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-	text:SetPoint("LEFT", cb, "RIGHT", 0, 1)
-	text:SetText(label)
-	cb.label = text
+	if label then
+		local text = cb:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		text:SetPoint("LEFT", cb, "RIGHT", 0, 1)
+		text:SetText(label)
+		cb.label = text
+	end
 	cb:SetScript("OnClick", function(self) onClick(self:GetChecked() and true or false) end)
 	if tooltip then
 		cb:SetScript("OnEnter", function(self)
@@ -58,14 +69,14 @@ end
 
 local function SetCheckEnabled(cb, enabled)
 	if enabled then cb:Enable() else cb:Disable() end
-	cb.label:SetFontObject(enabled and "GameFontHighlightSmall" or "GameFontDisableSmall")
+	if cb.label then cb.label:SetFontObject(enabled and "GameFontHighlightSmall" or "GameFontDisableSmall") end
 end
 
 -- Modern dropdown (11.0+ menu API), with a click-to-cycle fallback.
 local function CreateSkinPicker(parent, row)
 	local ok, dd = pcall(CreateFrame, "DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
 	if ok and dd and dd.SetupMenu then
-		dd:SetWidth(140)
+		dd:SetWidth(SKIN_WIDTH)
 		dd:SetupMenu(function(_, root)
 			for _, id in ipairs(ns.SkinList()) do
 				root:CreateRadio(id,
@@ -82,7 +93,7 @@ local function CreateSkinPicker(parent, row)
 	end
 
 	local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-	btn:SetSize(140, 22)
+	btn:SetSize(SKIN_WIDTH, 22)
 	btn:SetScript("OnClick", function()
 		if not row.group then return end
 		local list = ns.SkinList()
@@ -106,12 +117,30 @@ local function CreateRow(index)
 
 	row.label = row:CreateFontString(nil, "ARTWORK", "GameFontNormal")
 	row.label:SetPoint("LEFT", 4, 0)
-	row.label:SetWidth(160)
+	row.label:SetWidth(LABEL_WIDTH)
 	row.label:SetJustifyH("LEFT")
 	row.label:SetWordWrap(false)
 
 	row.skin = CreateSkinPicker(row, row)
-	row.skin:SetPoint("LEFT", 168, 0)
+	row.skin:SetPoint("LEFT", SKIN_X, 0)
+
+	row.colors = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+	row.colors:SetSize(COLORS_WIDTH, 22)
+	row.colors:SetText("Colors")
+	row.colors:SetPoint("LEFT", COLORS_X, 0)
+	row.colors:SetScript("OnClick", function()
+		if row.group then ns.ShowColors(row.group) end
+	end)
+	row.colors:SetMotionScriptsWhileDisabled(true)
+	row.colors:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText("Change the colour of the border, backdrop, highlight and other parts of the skin.", nil, nil, nil, nil, true)
+		if not self:IsEnabled() then
+			GameTooltip:AddLine("Untick Inherit to give this group its own colours.", 1, 0.3, 0.3, true)
+		end
+		GameTooltip:Show()
+	end)
+	row.colors:SetScript("OnLeave", GameTooltip_Hide)
 
 	local function toggle(key)
 		return function(value)
@@ -121,32 +150,14 @@ local function CreateRow(index)
 		end
 	end
 
-	row.inherit = CreateCheck(row, "Inherit", "Use the parent group's settings.", toggle("Inherit"))
-	row.inherit:SetPoint("LEFT", row.skin, "RIGHT", 6, 0)
-
-	row.backdrop = CreateCheck(row, "Backdrop", "Show the skin's backdrop behind empty slots.", toggle("Backdrop"))
-	row.backdrop:SetPoint("LEFT", row.inherit, "RIGHT", 44, 0)
-
-	row.gloss = CreateCheck(row, "Gloss", "Show the skin's gloss overlay (if it has one).", toggle("Gloss"))
-	row.gloss:SetPoint("LEFT", row.backdrop, "RIGHT", 56, 0)
-
-	row.shadow = CreateCheck(row, "Shadow", "Show the skin's shadow (if it has one).", toggle("Shadow"))
-	row.shadow:SetPoint("LEFT", row.gloss, "RIGHT", 38, 0)
-
-	row.disabled = CreateCheck(row, "Off", "Leave these buttons unskinned.", function(value)
-		if not row.group then return end
-		ns.SetOption(row.group, "Disabled", value)
-		ns.RefreshOptions()
-	end)
-	row.disabled:SetPoint("LEFT", row.shadow, "RIGHT", 46, 0)
-
-	row.colors = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-	row.colors:SetSize(60, 22)
-	row.colors:SetText("Colors")
-	row.colors:SetPoint("LEFT", row.disabled, "RIGHT", 28, 0)
-	row.colors:SetScript("OnClick", function()
-		if row.group then ns.ShowColors(row.group) end
-	end)
+	row.inherit = CreateCheck(row, nil, "Inherit: use the parent group's settings.", toggle("Inherit"))
+	row.backdrop = CreateCheck(row, nil, "Backdrop: show the skin's backdrop behind empty slots.", toggle("Backdrop"))
+	row.gloss = CreateCheck(row, nil, "Gloss: show the skin's gloss overlay (if it has one).", toggle("Gloss"))
+	row.shadow = CreateCheck(row, nil, "Shadow: show the skin's shadow (if it has one).", toggle("Shadow"))
+	row.disabled = CreateCheck(row, nil, "Off: leave these buttons unskinned.", toggle("Disabled"))
+	for i, cb in ipairs({ row.inherit, row.backdrop, row.gloss, row.shadow, row.disabled }) do
+		cb:SetPoint("LEFT", CHECK_X + (i - 1) * CHECK_STEP, 0)
+	end
 
 	rows[index] = row
 	return row
@@ -156,7 +167,7 @@ local function UpdateRow(row, entry)
 	local group = entry.group
 	row.group = group
 	row.label:SetPoint("LEFT", 4 + entry.depth * INDENT, 0)
-	row.label:SetWidth(160 - entry.depth * INDENT)
+	row.label:SetWidth(LABEL_WIDTH - entry.depth * INDENT)
 
 	local count = 0
 	for _ in pairs(group.Buttons) do count = count + 1 end
@@ -377,7 +388,22 @@ local function BuildPanel()
 	if not ok then
 		scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
 	end
-	scroll:SetPoint("TOPLEFT", blizz, "BOTTOMLEFT", 2, -10)
+	-- Column headers for the label-less checkboxes in each row.
+	local header = CreateFrame("Frame", nil, panel)
+	header:SetHeight(14)
+	header:SetPoint("TOPLEFT", blizz, "BOTTOMLEFT", 2, -8)
+	header:SetPoint("RIGHT", -30, 0)
+	local function Column(text, x)
+		local fs = header:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		fs:SetPoint("BOTTOM", header, "BOTTOMLEFT", x, 0)
+		fs:SetText(text)
+	end
+	Column("Skin", SKIN_X + SKIN_WIDTH / 2)
+	for i, text in ipairs(CHECK_COLUMNS) do
+		Column(text, CHECK_X + 12 + (i - 1) * CHECK_STEP)
+	end
+
+	scroll:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -4)
 	scroll:SetPoint("BOTTOMRIGHT", -30, 12)
 
 	scrollChild = CreateFrame("Frame", nil, scroll)
